@@ -27,4 +27,4 @@ app.include_router(users.router, prefix="/users", tags=["Users"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the FastAPI backend!"}
+    return {"message": "WWelcome to the FastAPI backend!"}
