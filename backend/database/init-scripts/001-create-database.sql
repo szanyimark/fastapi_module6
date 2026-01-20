@@ -1,0 +1,2 @@
+-- Create the fastapi_week4 database
+-- CREATE DATABASE fastapi_week4;
