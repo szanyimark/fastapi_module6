@@ -38,6 +38,14 @@ export default function Login() {
     }
   }
 
+  const handleGitHubLogin = () => {
+    window.location.href = `${API_URL}/auth/github/login`
+  }
+
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_URL}/auth/google/login`
+  }
+
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '400px', margin: '0 auto' }}>
       <h1>Login</h1>
@@ -78,6 +86,43 @@ export default function Login() {
           Login
         </button>
       </form>
+
+      <div style={{ marginTop: '2rem' }}>
+        <p style={{ textAlign: 'center', color: '#666', marginBottom: '1rem' }}>Or login with</p>
+        
+        <button
+          onClick={handleGitHubLogin}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            fontSize: '1rem',
+            backgroundColor: '#24292e',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginBottom: '0.5rem'
+          }}
+        >
+          🐙 Continue with GitHub
+        </button>
+
+        <button
+          onClick={handleGoogleLogin}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            fontSize: '1rem',
+            backgroundColor: '#4285f4',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          🌐 Continue with Google
+        </button>
+      </div>
     </div>
   )
 }
