@@ -26,7 +26,8 @@ router = APIRouter()
 
 def _oauth_login(provider: OAuthProvider, callback_path: str, response: Response):
     """Generic OAuth login handler for any provider."""
-    redirect_uri = f"http://localhost:8000{callback_path}"
+    APP_URL = os.getenv("APP_URL", "http://localhost:8000")
+    redirect_uri = f"{APP_URL}{callback_path}"
     authorization_url, state, code_verifier = get_oauth_authorization_url(provider, redirect_uri)
 
     # Store session data
