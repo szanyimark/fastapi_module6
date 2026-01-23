@@ -1,5 +1,6 @@
 from typing import List
 
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -38,6 +39,34 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+def find_or_create_user(
+    db: Session,
+    username: str,
+    email: str,
+    fullname: str
+) -> str:
+    """Find existing user or create new one. Returns the username."""
+    existing = db.query(User).filter(
+        (User.username == username) | (User.email == email)
+    ).first()
+    
+    if existing:
+        return existing.username
+    
+    # Create new user with random password (OAuth users don't use password)
+    random_pw = secrets.token_urlsafe(32)
+    new_user = User(
+        username=username,
+        fullname=fullname,
+        email=email,
+        hashed_password=hash_password(random_pw),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user.username
 
 
 @router.get("/", response_model=List[UserResponse])

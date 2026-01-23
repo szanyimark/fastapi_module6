@@ -1,150 +1,27 @@
 import os
-import secrets
 from fastapi import APIRouter, HTTPException, Cookie, Response, Depends
 from fastapi.responses import RedirectResponse
 from oauth import (
     get_oauth_authorization_url,
     exchange_oauth_code_for_token,
     get_oauth_user_info,
-    get_oauth_user_emails,
 )
 from oauth.providers import OAuthProvider
-from utils import create_access_token, hash_password
+from utils import create_access_token
 from sqlalchemy.orm import Session
 from database.database import get_db
-from models.user import User
+from oauth.session import (
+    create_session,
+    validate_csrf_token,
+    get_session_data,
+    cleanup_oauth_session,
+    validate_token_response,
+    COOKIE_SECURE,
+)
+from oauth.user_data import extract_provider_user_data
+from routers.users import find_or_create_user
 
 router = APIRouter()
-
-# In-memory storage for state and code_verifier (use Redis/DB in production)
-oauth_sessions = {}
-
-# Get cookie security setting from env (True for HTTPS/production, False for local dev)
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
-
-
-def create_session(state: str, code_verifier: str, redirect_uri: str) -> None:
-    """Store OAuth session data for later validation."""
-    oauth_sessions[state] = {
-        "code_verifier": code_verifier,
-        "redirect_uri": redirect_uri
-    }
-
-
-def validate_csrf_token(state: str, oauth_state: str) -> None:
-    """Validate state parameter matches cookie to prevent CSRF attacks."""
-    if not state or state != oauth_state:
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid state parameter - possible CSRF attack"
-        )
-
-
-def get_session_data(state: str) -> tuple[str, str]:
-    """Retrieve and validate OAuth session data."""
-    session_data = oauth_sessions.get(state)
-    if not session_data:
-        raise HTTPException(
-            status_code=400, 
-            detail="Session expired or invalid"
-        )
-    return session_data["code_verifier"], session_data["redirect_uri"]
-
-
-def cleanup_oauth_session(state: str, response: Response) -> None:
-    """Remove OAuth session data and state cookie."""
-    if state in oauth_sessions:
-        del oauth_sessions[state]
-    response.delete_cookie("oauth_state")
-
-
-def validate_token_response(token_response: dict) -> str:
-    """Validate token response and extract access token."""
-    if "error" in token_response:
-        raise HTTPException(
-            status_code=400,
-            detail=token_response.get("error_description", "OAuth error")
-        )
-    
-    access_token = token_response.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="No access token received")
-    
-    return access_token
-
-
-async def extract_github_user_data(user_info: dict, access_token: str) -> tuple[str, str, str]:
-    """Extract GitHub-specific user data (username, email, fullname)."""
-    username = user_info.get("login")
-    if not username:
-        raise HTTPException(status_code=400, detail="Failed to retrieve user information")
-    
-    fullname = user_info.get("name")
-    email = user_info.get("email")
-    
-    # GitHub email fallback
-    if not email:
-        emails = await get_oauth_user_emails(OAuthProvider.GITHUB, access_token)
-        primary = next((e for e in emails if e.get("primary") and e.get("verified")), None)
-        email = (primary or (emails[0] if emails else None) or {}).get("email")
-        if not email:
-            email = f"{username}@users.noreply.github.com"
-    
-    return username, email, fullname
-
-
-def extract_google_user_data(user_info: dict) -> tuple[str, str, str]:
-    """Extract Google-specific user data (username, email, fullname)."""
-    email = user_info.get("email")
-    if not email:
-        raise HTTPException(status_code=400, detail="Failed to retrieve user information")
-    
-    fullname = user_info.get("name", email.split("@")[0])
-    username = email.split("@")[0].replace(".", "_")
-    
-    return username, email, fullname
-
-
-async def extract_provider_user_data(
-    provider: OAuthProvider, 
-    user_info: dict, 
-    access_token: str
-) -> tuple[str, str, str]:
-    """Extract user data based on OAuth provider."""
-    if provider == OAuthProvider.GITHUB:
-        return await extract_github_user_data(user_info, access_token)
-    elif provider == OAuthProvider.GOOGLE:
-        return extract_google_user_data(user_info)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-
-
-def find_or_create_user(
-    db: Session,
-    username: str,
-    email: str,
-    fullname: str
-) -> str:
-    """Find existing user or create new one. Returns the username."""
-    existing = db.query(User).filter(
-        (User.username == username) | (User.email == email)
-    ).first()
-    
-    if existing:
-        return existing.username
-    
-    # Create new user with random password (OAuth users don't use password)
-    random_pw = secrets.token_urlsafe(32)
-    new_user = User(
-        username=username,
-        fullname=fullname,
-        email=email,
-        hashed_password=hash_password(random_pw),
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user.username
 
 
 def _oauth_login(provider: OAuthProvider, callback_path: str, response: Response):
